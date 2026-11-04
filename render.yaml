@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: kth-whatsapp-webhook
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python webhook.py
+    envVars:
+      - key: KTH_WA_VERIFY_TOKEN
+        sync: false
+      - key: KTH_WA_APP_SECRET
+        sync: false
