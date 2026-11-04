@@ -129,6 +129,30 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/health":
             self._send(200, b'{"status": "ok"}', "application/json")
             return
+        if parsed.path == "/events":
+            # Lectura de la cola para el consumidor autorizado (Albert).
+            # La llave es el mismo token de verificación (secreto ya
+            # distribuido solo entre Meta, Render y la bóveda local).
+            params = parse_qs(parsed.query)
+            key = self.headers.get("X-Events-Key") or (params.get("key") or [None])[0]
+            expected = get_verify_token()
+            if not expected or not key or not hmac.compare_digest(key, expected):
+                self._send(403, b"forbidden")
+                return
+            since = (params.get("since") or [None])[0]
+            records = []
+            for path in sorted(QUEUE.glob("event-*.json"))[-100:]:
+                try:
+                    rec = json.loads(path.read_text(encoding="utf-8"))
+                except (ValueError, OSError):
+                    continue
+                if since and rec.get("received_at", "") <= since:
+                    continue
+                rec["_file"] = path.name
+                records.append(rec)
+            body = json.dumps({"events": records}, ensure_ascii=False).encode("utf-8")
+            self._send(200, body, "application/json")
+            return
         if parsed.path != "/webhook":
             self._send(404, b"not found")
             return
